@@ -5,6 +5,7 @@ target/
 .DS_Store
 memory/
 !memory/.gitkeep
+repos/
 karpathy-wiki.log
 
 # Personal wiki content — keep folder scaffolding, ignore data
