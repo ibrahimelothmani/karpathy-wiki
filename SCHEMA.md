@@ -36,6 +36,7 @@ title: <human title>
 type: article | concept | summary
 slug: <kebab-case>
 sources: [<wiki-relative or URL>]   # articles + summaries only
+repo: <GitHub URL or local path>     # optional: associated source code repo
 concepts: [<concept-slug>, ...]      # articles only
 backlinks: [<wiki-relative>, ...]    # maintained by linter
 tags: [...]
@@ -62,10 +63,16 @@ tags: [...]
   with front-matter (`title`, `source`, `tags`). May auto-trigger compile.
 - **Compile** — for each new/changed file in `raw/`: write/update the
   matching article, summary, and concept pages, then refresh `index.md`.
-  Be incremental — never rewrite untouched files.
+  Be incremental — never rewrite untouched files. If a raw file has a
+  `repo` field with a GitHub URL, the system auto-clones it before
+  compilation and cleans it up after. Agents see a local path.
 - **Query** — search `wiki/` first; synthesize an answer; cite the wiki
   files used; optionally produce an artifact under `wiki/outputs/`.
   Responses are structured: `{ answer, sources[] }`.
+  When a wiki page has a `repo` front-matter field pointing to a local
+  clone, agents MUST read source code from that repo to answer code
+  questions. Include actual code snippets in answers — never paraphrase
+  code when the real source is available.
 - **Lint** — run a deterministic scan for orphans, broken links, and
   stub pages, then have the LLM additionally reason about contradictions
   and suggest connections. Output is structured.

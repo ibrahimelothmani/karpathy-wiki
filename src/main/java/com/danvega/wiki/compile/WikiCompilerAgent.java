@@ -1,15 +1,18 @@
 package com.danvega.wiki.compile;
 
 import com.danvega.wiki.config.SchemaLoader;
+import com.danvega.wiki.ingest.RepoResolver;
 import org.springaicommunity.agent.advisors.AutoMemoryToolsAdvisor;
 import org.springaicommunity.agent.tools.FileSystemTools;
 import org.springaicommunity.agent.tools.GlobTool;
+import org.springaicommunity.agent.tools.GrepTool;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -33,25 +36,36 @@ public class WikiCompilerAgent {
               4. Use front-matter: title, summary, concepts, sources, backlinks.
               5. Cross-link aggressively using `[[wiki-links]]` style.
               6. Consult skills (style-guide.md, article-template.md) before writing.
-              7. Be incremental: do not rewrite files that have not changed.
+              7. IMPORTANT — source code repos: If a cloned repo path is provided
+                 in the user message, you MUST use glob and grep to explore the
+                 repo directory, find the key source files (e.g. *.java, *.kt,
+                 *.py), read them, and include actual code snippets in fenced
+                 code blocks in the articles and concepts you produce. Articles
+                 about code MUST contain real code examples — never just describe
+                 what the code does in prose.
+              8. Be incremental: do not rewrite files that have not changed.
 
             Filesystem is the source of truth. Write clean, consistent Markdown.
             """;
 
     private final ChatClient chatClient;
     private final RawPreprocessor preprocessor;
+    private final RepoResolver repoResolver;
 
     public WikiCompilerAgent(ChatClient.Builder builder,
                              FileSystemTools fs,
                              GlobTool glob,
+                             GrepTool grep,
                              ToolCallback skillsTool,
                              AutoMemoryToolsAdvisor memoryAdvisor,
                              RawPreprocessor preprocessor,
+                             RepoResolver repoResolver,
                              SchemaLoader schemaLoader) {
         this.preprocessor = preprocessor;
+        this.repoResolver = repoResolver;
         this.chatClient = builder
                 .defaultSystem(schemaLoader.asSystemBlock() + SYSTEM_PROMPT)
-                .defaultTools(fs, glob)
+                .defaultTools(fs, glob, grep)
                 .defaultToolCallbacks(skillsTool)
                 .defaultAdvisors(memoryAdvisor)
                 .build();
@@ -63,25 +77,45 @@ public class WikiCompilerAgent {
             return "Nothing to compile — no new or modified files in raw/.";
         }
 
-        String userMessage = buildUserMessage(changed);
-        String result = chatClient.prompt().user(userMessage).call().content();
+        try {
+            Map<String, Path> repoMap = resolveReposOrThrow(changed);
 
-        commitOrThrow(changed);
-        return result;
+            String userMessage = buildUserMessage(changed, repoMap);
+            String result = chatClient.prompt().user(userMessage).call().content();
+
+            commitOrThrow(changed);
+            return result;
+        } finally {
+            repoResolver.cleanup();
+        }
     }
 
-    static String buildUserMessage(List<Path> changed) {
+    static String buildUserMessage(List<Path> changed, Map<String, Path> repoMap) {
         String fileList = changed.stream()
-                .map(p -> "- raw/" + p.getFileName())
+                .map(p -> "- " + p.toAbsolutePath())
                 .collect(Collectors.joining("\n"));
 
-        return """
+        StringBuilder sb = new StringBuilder();
+        sb.append("""
                 The following files in raw/ are new or have changed since the
                 last compile. Read each one and integrate it into the wiki/
                 directory now (articles, concepts, summaries, index, backlinks):
 
                 %s
-                """.formatted(fileList);
+                """.formatted(fileList));
+
+        if (!repoMap.isEmpty()) {
+            sb.append("\nThe following GitHub repos have been cloned locally. ");
+            sb.append("When a raw file has a `repo` field matching one of these URLs, ");
+            sb.append("read source code from the local path and include actual code ");
+            sb.append("snippets in the articles and concepts you produce:\n\n");
+            for (var entry : repoMap.entrySet()) {
+                sb.append("- ").append(entry.getKey()).append(" → ")
+                        .append(entry.getValue().toAbsolutePath()).append("\n");
+            }
+        }
+
+        return sb.toString();
     }
 
     private List<Path> findChangedOrThrow() {
@@ -89,6 +123,14 @@ public class WikiCompilerAgent {
             return preprocessor.findChanged();
         } catch (Exception e) {
             throw new RuntimeException("Raw preprocessing failed", e);
+        }
+    }
+
+    private Map<String, Path> resolveReposOrThrow(List<Path> changed) {
+        try {
+            return repoResolver.resolveRepos(changed);
+        } catch (Exception e) {
+            throw new RuntimeException("Repo resolution failed", e);
         }
     }
 

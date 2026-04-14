@@ -32,7 +32,12 @@ public class ResearchAgent {
                  paths of every file you actually read to answer the question
                  (e.g. "wiki/articles/react.md"). Never leave sources empty
                  unless you genuinely could not find anything in the wiki.
-              5. If wiki coverage is thin, say so in `answer` and suggest what
+              5. If a wiki page has a `repo` front-matter field, it points to a
+                 local clone of the associated source code. When answering code
+                 questions, read actual source files from the repo (use grep/glob
+                 to find relevant files, then read them). Include real code
+                 snippets in your answer — never paraphrase code.
+              6. If wiki coverage is thin, say so in `answer` and suggest what
                  should be ingested next.
             """;
 
