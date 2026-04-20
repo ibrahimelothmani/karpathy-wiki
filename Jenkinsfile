@@ -16,7 +16,7 @@ environment {
     stages {
         stage('Checkout') {
             steps {
-                git branch 'main' url 'https://github.com/the-green-1/karpathy-wiki.git'
+                git branch 'master' url 'https://github.com/ibrahimelothmani/karpathy-wiki.git'
             }
         }
         stage('Build & Unit Test') {
@@ -30,14 +30,14 @@ environment {
             }
             post {
                 always {
-                    junit allowEmptyResults : true, testResults : ' target/surefire-reports/*.xml '
-                    archiveArtifacts artifacts : 'target/*.jar', fingerprint : true
+                    junit allowEmptyResults: true, testResults: ' target/surefire-reports/*.xml '
+                    archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
                 }
             }
         }
         stage('SonarQube Analysis') {
             steps {
-                withCredentials ([ string ( credentialsId : '01' , variable : 'SONAR_TOKEN') ]) {
+                withCredentials ([ string ( credentialsId: '01' , variable: 'SONAR_TOKEN') ]) {
                     sh '''
                     ./ mvnw org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
                     - Dsonar.projectKey=karpathy-wiki \
