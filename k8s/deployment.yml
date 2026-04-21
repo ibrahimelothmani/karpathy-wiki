@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: karpathy-wiki-deployment
+  labels:
+    app: karpathy-wiki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: karpathy-wiki
+  template:
+    metadata:
+      labels:
+        app: karpathy-wiki
+    spec:
+      containers:
+        - name: karpathy-wiki-container
+          image: karpathy-wiki:latest
+          ports:
+            - containerPort: 8080
